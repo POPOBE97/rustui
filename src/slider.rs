@@ -1,25 +1,30 @@
-use std::ops::Div;
-
-use egui::{emath::Numeric, vec2, Color32, DragValue, Layout, Rect, Sense, Widget};
+use eframe::egui::{emath::Numeric, vec2, Color32, DragValue, Label, Layout, Rect, Sense, Widget};
 
 pub struct Slider<'a, T> {
   pub tint: &'a str,
+  pub title: Option<&'a str>,
   pub range: std::ops::RangeInclusive<T>,
   pub get_set_value: Box<dyn 'a + FnMut(Option<T>) -> T>,
 }
 
 impl<'a, T> Slider<'a, T> {
   pub fn from_get_set(range: std::ops::RangeInclusive<T>, tint: &'a str, get_set_value: impl 'a + FnMut(Option<T>) -> T) -> Self {
-    Self { tint: &tint, range, get_set_value: Box::new(get_set_value) }
+    Self { tint: &tint, range, get_set_value: Box::new(get_set_value), title: None }
+  }
+
+  pub fn with_title(mut self, title: &'a str) -> Self {
+    self.title = Some(title);
+    self
   }
 }
 
 impl<'a, T: Numeric> Widget for Slider<'a, T> {
-  fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
-    ui.allocate_ui_with_layout(ui.available_size_before_wrap(), Layout::right_to_left(egui::Align::Center), |ui| {
+  fn ui(mut self, ui: &mut eframe::egui::Ui) -> eframe::egui::Response {
+    let mut available_size = ui.available_size_before_wrap();
+    available_size.y = 20.0;
+    ui.allocate_ui_with_layout(available_size, Layout::right_to_left(eframe::egui::Align::Center), |ui| {
       // 1.draw the drag value
       let mut value = (self.get_set_value)(None);
-      let available_size = ui.available_size_before_wrap();
       ui.add_sized(vec2(0.0, available_size.y),DragValue::new(&mut value).speed(0.1).custom_formatter(|r, _| {
         if r.abs() < 1.0 {
           format!("{:.3}", r)
@@ -34,10 +39,13 @@ impl<'a, T: Numeric> Widget for Slider<'a, T> {
 
       let mut available_size = ui.available_size_before_wrap();
       available_size.x = available_size.x.max(ui.style().spacing.slider_width);
+      if self.title.is_some() {
+        available_size.x -= 108.0;
+      }
 
       let (mut response, painter) = ui
         .allocate_painter(available_size, Sense::click_and_drag());
-      response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+      response = response.on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
 
       let rect = painter.clip_rect();
       let size = rect.max - rect.min;
@@ -50,6 +58,11 @@ impl<'a, T: Numeric> Widget for Slider<'a, T> {
       };
       painter.rect_filled(rect, 4.0, Color32::from_hex(format!("#{}{}", self.tint, background_alpha).as_str()).unwrap());
 
+      if let Some(title) = self.title {
+        ui.allocate_ui_with_layout(vec2(100.0, 20.0), Layout::left_to_right(eframe::egui::Align::Center), |ui| {
+          ui.label(title);
+        });
+      }
       // 2. draw the cursor
       // if response.hovered() {
         let cursor_size = vec2(4.0, size.y);
