@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, ops::{Index, IndexMut, RangeInclusive}};
+use std::{collections::BTreeMap, ops::{Deref, Index, IndexMut, RangeInclusive}};
 
 use crate::{persist_order_map::PersistOrderMap, slider::Slider};
 
@@ -257,10 +257,49 @@ impl<'a> ControlGroupBuilder<'a> {
     self
   }
 
+
+  pub fn button(self, ui: &mut eframe::egui::Ui, title: &'static str, mut action: impl FnMut()) -> Self {
+      if ui.button(title).clicked() {
+        action();
+      }
+      self
+    }
+
 }
 
-// -------------------- controls -------------------- //
+// -------------------- action group -------------------- //
+pub struct ActionGroup {
+  pub name: &'static str,
+  pub actions: BTreeMap<&'static str, Box<dyn FnMut(&mut Controls)>>,
+}
 
+impl ActionGroup {
+  pub fn new(name: &'static str) -> ActionGroup {
+    ActionGroup {
+      name,
+      actions: BTreeMap::new(),
+    }
+  }
+}
+
+
+pub struct ActionGroupBuilder<'a> {
+  group: &'a mut ActionGroup,
+}
+
+impl<'a> ActionGroupBuilder<'a> {
+  pub fn new(group: &'a mut ActionGroup) -> ActionGroupBuilder<'a> {
+    ActionGroupBuilder {
+      group,
+    }
+  }
+
+  pub fn button(self, name: &'static str, action: impl FnMut(&mut Controls) + 'static) -> Self {
+    self.group.actions.insert(name, Box::new(action));
+    self
+  }
+}
+// -------------------- controls -------------------- //
 #[macro_export]
 macro_rules! controls {
     () => { Controls::new(BTreeMap::<&str, ControlGroup>::new()) };
@@ -310,7 +349,7 @@ impl Controls {
     todo!()
   }
 
-  pub fn save_json(&self) {
+  pub fn save_json(&mut self) {
     // let js_value = rfd::AsyncFileDialog::new()
     //   .set_file_name("uniforms.json")
     //   .save_file();
@@ -361,6 +400,22 @@ impl Controls {
 
     build(builder);
     
+    self
+  }
+
+  pub fn action_group(&mut self, ui: &mut eframe::egui::Ui, name: &'static str, build: impl FnOnce(ActionGroupBuilder) -> ActionGroupBuilder) -> &mut Self {
+    let mut action_group = ActionGroup::new(name);
+    build(ActionGroupBuilder::new(&mut action_group));
+    ui.horizontal(|ui| {
+      for (title, action) in &mut action_group.actions {
+        if ui.button(*title).clicked() {
+          action(self);
+        }
+      }
+    });
+
+    ui.add_space(20.0);
+    ui.separator();
     self
   }
 
